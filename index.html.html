@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0f766e">
+  <title>Etiquetas para celulares</title>
+
+  <!-- Tailwind CSS (CDN) y JsBarcode (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"></script>
+
+  <!-- Tamaño de página de impresión (lo actualiza el JS según la etiqueta elegida) -->
+  <style id="pageSizeStyle">@page { size: 60mm 40mm; margin: 0; }</style>
+
+  <style>
+    /* =========================================================
+       ESTILOS DE LA INTERFAZ (pantalla)
+       ========================================================= */
+    body { -webkit-text-size-adjust: 100%; }
+
+    .card {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 1rem;
+      padding: 1.25rem;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, .05);
+    }
+
+    .field {
+      width: 100%;
+      font-size: 16px;               /* evita el zoom automático en iOS */
+      padding: .7rem .8rem;
+      border: 1.5px solid #cbd5e1;
+      border-radius: .65rem;
+      background: #fff;
+      color: #0f172a;
+    }
+    .field:focus {
+      outline: none;
+      border-color: #0f766e;
+      box-shadow: 0 0 0 3px rgba(15, 118, 110, .2);
+    }
+
+    .btn {
+      min-height: 48px;
+      padding: .8rem 1.1rem;
+      border-radius: .8rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform .05s, filter .15s;
+    }
+    .btn:active { transform: scale(.97); }
+    .btn-primary   { background: #0f766e; color: #fff; border: 0; }
+    .btn-primary:hover { filter: brightness(1.1); }
+    .btn-secondary { background: #fff; color: #334155; border: 1.5px solid #cbd5e1; }
+
+    /* Selector de estado de red (segmentado) */
+    .seg input { position: absolute; opacity: 0; pointer-events: none; }
+    .seg span {
+      display: block;
+      height: 100%;
+      padding: .65rem .75rem;
+      border: 1.5px solid #cbd5e1;
+      border-radius: .65rem;
+      font-weight: 600;
+      font-size: .9rem;
+      cursor: pointer;
+      background: #fff;
+    }
+    .seg small { display: block; font-weight: 400; color: #64748b; font-size: .75rem; }
+    .seg input:checked + span { border-color: #0f766e; background: #ecfdf5; color: #065f46; }
+    .seg input:focus-visible + span { box-shadow: 0 0 0 3px rgba(15, 118, 110, .25); }
+
+    /* Escenario de la vista previa */
+    #scaler { position: relative; }
+    #scaler .label { position: absolute; left: 0; top: 0; box-shadow: 0 4px 14px rgba(0, 0, 0, .18); }
+
+    /* =========================================================
+       ETIQUETA (se mide en milímetros: lo que ves = lo que se imprime)
+       ========================================================= */
+    .label {
+      background: #fff;
+      color: #000;
+      padding: 1mm;
+      box-sizing: border-box;
+      overflow: hidden;
+      font-family: Arial, Helvetica, sans-serif;
+      transform-origin: top left;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .lbl {
+      height: 100%;
+      box-sizing: border-box;
+      border: .4mm solid #000;
+      border-radius: 1.2mm;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Encabezado */
+    .lbl-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1mm;
+      padding: .6mm 1.5mm;
+      border-bottom: .4mm solid #000;
+    }
+    .lbl-store { font-size: 7pt; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .lbl-date  { font-size: 5pt; font-weight: 600; white-space: nowrap; }
+
+    /* Marca y modelo */
+    .lbl-main {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: .8mm 1.5mm;
+    }
+    .lbl-brand { font-size: 6pt; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; line-height: 1.1; }
+    .lbl-model {
+      font-weight: 900;
+      line-height: 1.05;
+      overflow-wrap: anywhere;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    /* Almacenamiento · Batería · Red */
+    .lbl-grid {
+      display: grid;
+      grid-template-columns: minmax(0, .9fr) minmax(0, .9fr) minmax(0, 1.5fr);
+      border-top: .3mm solid #000;
+      border-bottom: .3mm solid #000;
+    }
+    .lbl-grid > div { padding: .5mm 1.2mm; border-right: .3mm solid #000; }
+    .lbl-grid > div:last-child { border-right: 0; }
+    .lbl-grid span { display: block; font-size: 4.2pt; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    .lbl-grid b {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      overflow-wrap: anywhere;
+      font-size: 7.5pt;
+      font-weight: 800;
+      line-height: 1.1;
+    }
+
+    /* IMEI + código de barras */
+    .lbl-imei { padding: .8mm 1.5mm 1mm; }
+    .bars { display: block; width: 100%; height: 7mm; }
+    .bars.ghost { opacity: .18; }
+    .lbl-imei-row { display: flex; justify-content: space-between; align-items: baseline; margin-top: .4mm; }
+    .lbl-imei-row span { font-size: 5pt; font-weight: 800; letter-spacing: .1em; }
+    .lbl-imei-row b {
+      font-family: ui-monospace, "Courier New", monospace;
+      font-size: 8pt;
+      font-weight: 700;
+      letter-spacing: .1em;
+    }
+
+    /* Variante vertical 50 × 70 mm: más espacio para el código de barras */
+    .label[data-size="50x70"] .bars { height: 12mm; }
+    .label[data-size="50x70"] .lbl-grid b { font-size: 6.8pt; }
+
+    /* Texto de relleno cuando un campo está vacío */
+    .empty { color: #9ca3af !important; font-weight: 600 !important; }
+
+    /* =========================================================
+       IMPRESIÓN: solo sale la etiqueta
+       ========================================================= */
+    #printRoot { display: none; }
+
+    @media print {
+      html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
+      /* Oculta absolutamente todo excepto la copia de la etiqueta */
+      body > *:not(#printRoot) { display: none !important; }
+      #printRoot { display: block !important; }
+      #printRoot .label { box-shadow: none !important; margin: 0; page-break-inside: avoid; break-inside: avoid; }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+
+<body class="min-h-screen bg-slate-100 text-slate-900">
+
+  <header class="no-print bg-teal-700 text-white">
+    <div class="mx-auto max-w-5xl px-4 py-4">
+      <h1 class="text-xl font-bold">Etiquetas para celulares</h1>
+      <p class="text-sm text-teal-100">Llena los datos, revisa la vista previa e imprime.</p>
+    </div>
+  </header>
+
+  <main class="no-print mx-auto grid max-w-5xl gap-6 px-4 pb-28 pt-6 lg:grid-cols-2 lg:items-start lg:pb-10">
+
+    <!-- ============ 1. FORMULARIO ============ -->
+    <section class="space-y-4">
+      <form id="form" class="card space-y-4" autocomplete="off" novalidate>
+        <h2 class="text-lg font-bold">Datos del equipo</h2>
+
+        <div class="grid grid-cols-2 gap-3">
+          <label class="block">
+            <span class="mb-1 block text-sm font-semibold text-slate-600">Marca</span>
+            <input id="brand" class="field" type="text" list="marcas" maxlength="30" placeholder="Samsung" autocapitalize="words">
+          </label>
+          <label class="block">
+            <span class="mb-1 block text-sm font-semibold text-slate-600">Modelo</span>
+            <input id="model" class="field" type="text" maxlength="40" placeholder="Galaxy S23" autocapitalize="words">
+          </label>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <label class="block">
+            <span class="mb-1 block text-sm font-semibold text-slate-600">Almacenamiento</span>
+            <input id="storage" class="field" type="text" list="capacidades" maxlength="12" placeholder="128GB">
+          </label>
+          <label class="block">
+            <span class="mb-1 block text-sm font-semibold text-slate-600">Batería</span>
+            <input id="battery" class="field" type="text" maxlength="20" placeholder="85% o Óptima / Nueva">
+          </label>
+        </div>
+
+        <fieldset>
+          <legend class="mb-1 block text-sm font-semibold text-slate-600">Estado de red</legend>
+          <div class="grid grid-cols-2 gap-2">
+            <label class="seg relative block">
+              <input type="radio" name="net" value="unlocked" checked>
+              <span>Desbloqueado<small>de fábrica / Factory Unlocked</small></span>
+            </label>
+            <label class="seg relative block">
+              <input type="radio" name="net" value="locked">
+              <span>Bloqueado<small>atado a un operador</small></span>
+            </label>
+          </div>
+        </fieldset>
+
+        <label class="block">
+          <span class="mb-1 flex items-center justify-between text-sm font-semibold text-slate-600">
+            <span>Número IMEI</span>
+            <span id="imeiCount" class="font-mono text-xs text-slate-400">0/15</span>
+          </span>
+          <input id="imei" class="field font-mono tracking-wider" type="text" inputmode="numeric" maxlength="24" placeholder="15 dígitos">
+          <span id="imeiHint" class="mt-1 block min-h-[1.1rem] text-xs text-slate-500"></span>
+        </label>
+
+        <details class="rounded-xl bg-slate-50 p-3">
+          <summary class="cursor-pointer text-sm font-semibold text-slate-600">Opciones de la etiqueta</summary>
+          <div class="mt-3 space-y-3">
+            <label class="block">
+              <span class="mb-1 block text-sm font-semibold text-slate-600">Nombre de la tienda (encabezado)</span>
+              <input id="store" class="field" type="text" maxlength="24" value="TECNOMARKET">
+            </label>
+            <label class="flex items-center gap-2 text-sm text-slate-700">
+              <input id="showDate" type="checkbox" checked class="h-5 w-5 accent-teal-700">
+              Mostrar la fecha de hoy en la etiqueta
+            </label>
+          </div>
+        </details>
+      </form>
+
+      <!-- Botones: fijos abajo en el teléfono, normales en pantallas grandes -->
+      <div class="fixed inset-x-0 bottom-0 z-20 flex gap-3 border-t border-slate-200 bg-white/95 p-3 backdrop-blur lg:static lg:border-0 lg:bg-transparent lg:p-0">
+        <button id="btnClear" type="button" class="btn btn-secondary">Limpiar formulario</button>
+        <button id="btnPrint" type="button" class="btn btn-primary flex-1">Imprimir etiqueta</button>
+      </div>
+    </section>
+
+    <!-- ============ 2. VISTA PREVIA ============ -->
+    <section class="card lg:sticky lg:top-6">
+      <div class="mb-3 flex items-center justify-between gap-3">
+        <h2 class="text-lg font-bold">Vista previa</h2>
+        <select id="size" class="field" style="width:auto;padding-top:.45rem;padding-bottom:.45rem" aria-label="Tamaño de etiqueta">
+          <option value="60x40">60 × 40 mm (horizontal)</option>
+          <option value="50x70">50 × 70 mm (vertical)</option>
+        </select>
+      </div>
+
+      <div id="stage" class="flex justify-center overflow-hidden rounded-xl bg-slate-200 p-3">
+        <div id="scaler">
+
+          <!-- ETIQUETA -->
+          <div id="label" class="label" data-size="60x40">
+            <div class="lbl">
+              <div class="lbl-head">
+                <span id="lStore" class="lbl-store">TECNOMARKET</span>
+                <span id="lDate" class="lbl-date"></span>
+              </div>
+
+              <div class="lbl-main">
+                <div id="lBrand" class="lbl-brand">Marca</div>
+                <div id="lModel" class="lbl-model">Modelo</div>
+              </div>
+
+              <div class="lbl-grid">
+                <div><span>Almacen.</span><b id="lStorage">—</b></div>
+                <div><span>Batería</span><b id="lBattery">—</b></div>
+                <div><span>Red</span><b id="lNet">Desbloqueado</b></div>
+              </div>
+
+              <div class="lbl-imei">
+                <svg id="barcode" class="bars" xmlns="http://www.w3.org/2000/svg"></svg>
+                <div class="lbl-imei-row"><span>IMEI</span><b id="lImei">000000000000000</b></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <p id="sizeHint" class="mt-3 text-xs leading-relaxed text-slate-500"></p>
+    </section>
+  </main>
+
+  <!-- Listas de sugerencias -->
+  <datalist id="marcas">
+    <option>Samsung</option><option>Apple</option><option>Xiaomi</option><option>Motorola</option>
+    <option>Huawei</option><option>Honor</option><option>Oppo</option><option>Realme</option>
+    <option>Google</option><option>OnePlus</option><option>ZTE</option><option>Tecno</option>
+    <option>Infinix</option><option>Nokia</option>
+  </datalist>
+  <datalist id="capacidades">
+    <option>32GB</option><option>64GB</option><option>128GB</option>
+    <option>256GB</option><option>512GB</option><option>1TB</option>
+  </datalist>
+
+  <div id="toast" class="no-print pointer-events-none fixed left-1/2 top-4 z-30 -translate-x-1/2 rounded-full bg-slate-900 px-4 py-2 text-sm text-white opacity-0 transition-opacity"></div>
+
+  <!-- Copia de la etiqueta que realmente se imprime -->
+  <div id="printRoot" aria-hidden="true"></div>
+
+  <script>
+  (() => {
+    'use strict';
+    const $ = (id) => document.getElementById(id);
+
+    // <pure> — funciones sin DOM (fáciles de probar)
+    const SIZES = {
+      '60x40': { w: 60, h: 40, name: '60 × 40 mm' },
+      '50x70': { w: 50, h: 70, name: '50 × 70 mm' },
+    };
+
+    function fmtStorage(raw) {
+      const t = raw.trim();
+      if (!t) return '';
+      const c = t.replace(/\s+/g, '');
+      if (/^\d+$/.test(c)) return c + 'GB';            // "128"  -> "128GB"
+      if (/^\d+(gb|tb)$/i.test(c)) return c.toUpperCase(); // "1 tb" -> "1TB"
+      return t;
+    }
+
+    function fmtBattery(raw) {
+      const t = raw.trim();
+      if (!t) return '';
+      const c = t.replace(/\s+/g, '');
+      if (/^\d{1,3}%?$/.test(c)) return c.replace('%', '') + '%'; // "85" -> "85%"
+      return t;                                                    // "Óptima / Nueva"
+    }
+
+    function cleanImei(raw) {
+      return raw.replace(/\D/g, '').slice(0, 15);
+    }
+
+    // Validación Luhn (el dígito 15 del IMEI es un dígito de control)
+    function luhn(s) {
+      let sum = 0;
+      for (let i = 0; i < s.length; i++) {
+        let d = Number(s[s.length - 1 - i]);
+        if (i % 2 === 1) { d *= 2; if (d > 9) d -= 9; }
+        sum += d;
+      }
+      return sum % 10 === 0;
+    }
+
+    // Tamaño de fuente del modelo según su largo (para que siempre quepa)
+    function modelPt(len, widthMm) {
+      const k = widthMm <= 50 ? 0.9 : 1;
+      const pt = len <= 10 ? 15 : len <= 14 ? 13 : len <= 20 ? 11 : len <= 28 ? 9.5 : 8;
+      return Math.round(pt * k * 10) / 10;
+    }
+
+    // Reduce la fuente de una celda cuando el texto es largo
+    function cellPt(len, base, limit) {
+      return len > limit ? Math.round(base * 0.72 * 10) / 10 : base;
+    }
+    // </pure>
+
+    /* ---------- Lectura del formulario ---------- */
+    function read() {
+      return {
+        store: $('store').value.trim() || 'TECNOMARKET',
+        brand: $('brand').value.trim(),
+        model: $('model').value.trim(),
+        storage: fmtStorage($('storage').value),
+        battery: fmtBattery($('battery').value),
+        net: document.querySelector('input[name="net"]:checked').value,
+        imei: cleanImei($('imei').value),
+        showDate: $('showDate').checked,
+        size: $('size').value,
+      };
+    }
+
+    /* ---------- Render de la etiqueta ---------- */
+    function setText(id, text, placeholder) {
+      const el = $(id);
+      el.textContent = text || placeholder;
+      el.classList.toggle('empty', !text);
+    }
+
+    function drawBarcode(value, ghost) {
+      const svg = $('barcode');
+      svg.classList.toggle('ghost', ghost);
+      if (typeof JsBarcode === 'undefined') { svg.style.display = 'none'; return; } // sin internet: queda el IMEI en texto
+      svg.style.display = '';
+      try {
+        JsBarcode(svg, value, { format: 'CODE128', displayValue: false, margin: 0, width: 2, height: 60 });
+        // Hace que las barras se estiren al ancho de la etiqueta
+        const w = parseFloat(svg.getAttribute('width'));
+        const h = parseFloat(svg.getAttribute('height'));
+        if (!svg.getAttribute('viewBox') && w && h) svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+        svg.removeAttribute('width');
+        svg.removeAttribute('height');
+        svg.setAttribute('preserveAspectRatio', 'none');
+      } catch (_) {
+        svg.style.display = 'none';
+      }
+    }
+
+    function render() {
+      const s = read();
+      const dims = SIZES[s.size];
+      const label = $('label');
+
+      // Tamaño físico de la etiqueta
+      label.dataset.size = s.size;
+      label.style.width = dims.w + 'mm';
+      label.style.height = (dims.h - 0.4) + 'mm'; // margen de seguridad: evita una 2.ª hoja en blanco
+      $('pageSizeStyle').textContent = `@page { size: ${dims.w}mm ${dims.h}mm; margin: 0; }`;
+      $('sizeHint').textContent =
+        `Se imprime a tamaño real (${dims.name}). En el diálogo de impresión elige tu impresora de etiquetas, ` +
+        `márgenes «Ninguno» y escala 100 %.`;
+
+      // Textos
+      $('lStore').textContent = s.store;
+      $('lDate').textContent = s.showDate ? new Date().toLocaleDateString('es-NI') : '';
+      setText('lBrand', s.brand, 'Marca');
+      setText('lModel', s.model, 'Modelo del equipo');
+      setText('lStorage', s.storage, '—');
+      setText('lBattery', s.battery, '—');
+      $('lNet').textContent = s.net === 'unlocked' ? 'Desbloqueado' : 'Bloqueado';
+
+      // Tamaños de fuente adaptativos
+      $('lModel').style.fontSize = modelPt(s.model.length, dims.w) + 'pt';
+      const base = dims.w <= 50 ? 6.8 : 7.5;
+      $('lStorage').style.fontSize = cellPt(s.storage.length, base, 7) + 'pt';
+      $('lBattery').style.fontSize = cellPt(s.battery.length, base, 7) + 'pt';
+      $('lNet').style.fontSize = cellPt($('lNet').textContent.length, base, 12) + 'pt';
+
+      // IMEI y código de barras
+      const hasImei = s.imei.length > 0;
+      $('lImei').textContent = hasImei ? s.imei : '000000000000000';
+      $('lImei').classList.toggle('empty', !hasImei);
+      drawBarcode(hasImei ? s.imei : '000000000000000', !hasImei);
+
+      // Mensaje de ayuda bajo el campo IMEI
+      const count = $('imeiCount'), hint = $('imeiHint');
+      count.textContent = `${s.imei.length}/15`;
+      if (!hasImei) {
+        hint.textContent = '';
+      } else if (s.imei.length < 15) {
+        hint.textContent = 'Faltan dígitos: el IMEI completo tiene 15.';
+        hint.className = 'mt-1 block min-h-[1.1rem] text-xs text-amber-600';
+      } else if (luhn(s.imei)) {
+        hint.textContent = '✓ IMEI válido.';
+        hint.className = 'mt-1 block min-h-[1.1rem] text-xs text-emerald-600';
+      } else {
+        hint.textContent = '⚠ El dígito de control no coincide: revisa que el IMEI esté bien escrito.';
+        hint.className = 'mt-1 block min-h-[1.1rem] text-xs text-amber-600';
+      }
+
+      fitPreview();
+    }
+
+    /* ---------- Vista previa ampliada (sin afectar el tamaño real) ---------- */
+    function fitPreview() {
+      const dims = SIZES[$('size').value];
+      const px = 96 / 25.4; // mm → px CSS
+      const w = dims.w * px, h = dims.h * px;
+      const avail = $('stage').clientWidth - 24;
+      const scale = Math.max(0.5, Math.min(avail / w, 540 / h, 4));
+      $('scaler').style.width = w * scale + 'px';
+      $('scaler').style.height = h * scale + 'px';
+      $('label').style.transform = `scale(${scale})`;
+    }
+
+    /* ---------- Impresión ---------- */
+    function syncPrintCopy() {
+      const root = $('printRoot');
+      root.innerHTML = '';
+      const clone = $('label').cloneNode(true);
+      clone.removeAttribute('id');
+      clone.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));
+      clone.style.transform = 'none';
+      root.appendChild(clone);
+    }
+
+    function imprimir() {
+      const s = read();
+      if (!s.brand && !s.model) {
+        toast('Escribe al menos la marca o el modelo');
+        $('brand').focus();
+        return;
+      }
+      if (s.imei && s.imei.length !== 15 &&
+          !confirm(`El IMEI tiene ${s.imei.length} dígitos (debería tener 15). ¿Imprimir de todos modos?`)) return;
+      syncPrintCopy();
+      window.print();
+    }
+    window.addEventListener('beforeprint', syncPrintCopy); // también funciona con Ctrl+P
+
+    /* ---------- Utilidades de interfaz ---------- */
+    let toastTimer;
+    function toast(msg) {
+      const t = $('toast');
+      t.textContent = msg;
+      t.style.opacity = '1';
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { t.style.opacity = '0'; }, 2200);
+    }
+
+    function limpiar() {
+      ['brand', 'model', 'storage', 'battery', 'imei'].forEach((id) => { $(id).value = ''; });
+      document.querySelector('input[name="net"][value="unlocked"]').checked = true;
+      render();
+      $('brand').focus();
+    }
+
+    /* ---------- Guardar preferencias (tienda, tamaño, fecha) ---------- */
+    const PREFS = 'etiquetas-prefs-v1';
+    function savePrefs() {
+      try {
+        localStorage.setItem(PREFS, JSON.stringify({
+          store: $('store').value, size: $('size').value, showDate: $('showDate').checked,
+        }));
+      } catch (_) { /* modo privado: se ignora */ }
+    }
+    function loadPrefs() {
+      try {
+        const p = JSON.parse(localStorage.getItem(PREFS));
+        if (!p) return;
+        if (typeof p.store === 'string') $('store').value = p.store;
+        if (SIZES[p.size]) $('size').value = p.size;
+        if (typeof p.showDate === 'boolean') $('showDate').checked = p.showDate;
+      } catch (_) { /* datos dañados: se ignoran */ }
+    }
+
+    /* ---------- Eventos ---------- */
+    $('form').addEventListener('submit', (e) => e.preventDefault());
+
+    $('form').addEventListener('input', (e) => {
+      if (e.target.id === 'imei') {
+        const c = cleanImei(e.target.value);       // deja solo dígitos (acepta pegar con guiones o espacios)
+        if (c !== e.target.value) e.target.value = c;
+      }
+      render();
+      savePrefs();
+    });
+    $('form').addEventListener('change', () => { render(); savePrefs(); });
+    $('size').addEventListener('change', () => { render(); savePrefs(); });
+
+    $('btnPrint').addEventListener('click', imprimir);
+    $('btnClear').addEventListener('click', limpiar);
+
+    window.addEventListener('resize', fitPreview);
+    if ('ResizeObserver' in window) new ResizeObserver(fitPreview).observe($('stage'));
+
+    /* ---------- Inicio ---------- */
+    loadPrefs();
+    render();
+  })();
+  </script>
+</body>
+</html>
